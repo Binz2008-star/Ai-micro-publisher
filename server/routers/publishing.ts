@@ -9,7 +9,7 @@
  */
 
 import { z } from "zod";
-import { desc, eq, and } from "drizzle-orm";
+import { desc, eq, and, or } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { protectedProcedure, publicProcedure, router } from "../_core/trpc";
 import { getDb, logAdminAction } from "../db";
@@ -17,6 +17,7 @@ import { contentPages } from "../../drizzle/schema";
 import { publishPage, publishAllApproved, archivePage } from "../m5/publisher";
 import { generateSitemapEntries } from "../m5/sitemap";
 import { isPlaceholderBaseUrl, resolveBaseUrlInfo } from "../m5/baseUrl";
+import { shouldNoindexPage } from "../m5/visibility";
 
 // ─── adminProcedure ───────────────────────────────────────────────────────────
 
@@ -140,7 +141,10 @@ export const publishingRouter = router({
         .where(
           and(
             eq(contentPages.slug, input.slug),
-            eq(contentPages.status, "published"),
+            or(
+              eq(contentPages.status, "published"),
+              eq(contentPages.status, "archived"),
+            ),
           )
         )
         .limit(1);
@@ -152,7 +156,7 @@ export const publishingRouter = router({
         ...page,
         publicUrl: `${baseUrl}/p/${page.slug}`,
         canonicalUrl: `${baseUrl}/p/${page.slug}`,
-        noindex: page.status === "archived" || page.policyStatus === "rejected",
+        noindex: shouldNoindexPage(page.status, page.policyStatus),
       };
     }),
 

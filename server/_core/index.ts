@@ -130,6 +130,18 @@ async function startServer() {
     }
   });
 
+  // robots.txt endpoint (public)
+  app.get('/robots.txt', async (req, res) => {
+    try {
+      const { buildRobotsTxt } = await import('../m5/robots');
+      const { baseUrl } = resolveBaseUrlInfo(req);
+      res.set('Content-Type', 'text/plain; charset=utf-8');
+      res.send(buildRobotsTxt(baseUrl));
+    } catch (err) {
+      res.status(500).send('Robots generation failed');
+    }
+  });
+
   // tRPC API
   app.use(
     "/api/trpc",

@@ -10,7 +10,7 @@
  */
 
 import { useEffect } from "react";
-import { useParams, useLocation } from "wouter";
+import { useParams } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { Streamdown } from "streamdown";
 import { Loader2, AlertTriangle, ArrowLeft } from "lucide-react";
@@ -33,11 +33,15 @@ function SeoHead({
   noindex: boolean;
 }) {
   useEffect(() => {
+    const previousTitle = document.title;
+
     // Update document title
     document.title = `${title} | AI Micro-Publisher`;
 
     // Update/create meta description
     let metaDesc = document.querySelector('meta[name="description"]');
+    const hadMetaDesc = !!metaDesc;
+    const previousMetaDesc = metaDesc?.getAttribute("content");
     if (!metaDesc) {
       metaDesc = document.createElement("meta");
       metaDesc.setAttribute("name", "description");
@@ -47,6 +51,8 @@ function SeoHead({
 
     // Update/create canonical link
     let canonical = document.querySelector('link[rel="canonical"]');
+    const hadCanonical = !!canonical;
+    const previousCanonicalHref = canonical?.getAttribute("href");
     if (!canonical) {
       canonical = document.createElement("link");
       canonical.setAttribute("rel", "canonical");
@@ -56,6 +62,8 @@ function SeoHead({
 
     // Noindex meta tag
     let robotsMeta = document.querySelector('meta[name="robots"]');
+    const hadRobotsMeta = !!robotsMeta;
+    const previousRobotsContent = robotsMeta?.getAttribute("content");
     if (!robotsMeta) {
       robotsMeta = document.createElement("meta");
       robotsMeta.setAttribute("name", "robots");
@@ -78,8 +86,26 @@ function SeoHead({
     }
 
     return () => {
-      // Cleanup on unmount
-      document.title = "AI Micro-Publisher";
+      document.title = previousTitle;
+
+      if (hadMetaDesc) {
+        metaDesc?.setAttribute("content", previousMetaDesc ?? "");
+      } else {
+        metaDesc?.remove();
+      }
+
+      if (hadCanonical) {
+        canonical?.setAttribute("href", previousCanonicalHref ?? "");
+      } else {
+        canonical?.remove();
+      }
+
+      if (hadRobotsMeta) {
+        robotsMeta?.setAttribute("content", previousRobotsContent ?? "");
+      } else {
+        robotsMeta?.remove();
+      }
+
       document.querySelectorAll('script[data-schema="ai-publisher"]').forEach((s) => s.remove());
     };
   }, [title, description, canonicalUrl, structuredData, noindex]);
@@ -170,7 +196,7 @@ export default function PublicPage() {
           </div>
 
           {/* Structured data debug (dev mode) */}
-          {structuredDataArray.length > 0 && (
+          {import.meta.env.DEV && structuredDataArray.length > 0 && (
             <details className="mt-12 border border-slate-200 rounded p-3 text-xs">
               <summary className="cursor-pointer text-slate-500 font-medium">
                 JSON-LD Structured Data ({structuredDataArray.length} schema{structuredDataArray.length > 1 ? "s" : ""})

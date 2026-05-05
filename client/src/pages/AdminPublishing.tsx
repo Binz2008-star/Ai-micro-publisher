@@ -91,9 +91,14 @@ export default function AdminPublishingPage() {
     );
   }
 
-  const approvedCount = approvedPages.data?.pages.length ?? 0;
   const publishedCount = publishedPages.data?.pages.length ?? 0;
   const isRefreshing = approvedPages.isFetching || publishedPages.isFetching || publishConfig.isFetching;
+  const publishablePages = (approvedPages.data?.pages ?? []).filter(
+    (page) => page.qualityDecision === "approve" && page.policyStatus === "approved",
+  );
+  const blockedApprovedPages = (approvedPages.data?.pages ?? []).filter(
+    (page) => page.qualityDecision !== "approve" || page.policyStatus !== "approved",
+  );
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -130,7 +135,7 @@ export default function AdminPublishingPage() {
               size="sm"
               className="bg-indigo-600 hover:bg-indigo-700 text-white"
               onClick={() => publishAllMutation.mutate()}
-              disabled={publishAllMutation.isPending || approvedCount === 0}
+              disabled={publishAllMutation.isPending || publishablePages.length === 0}
             >
               {publishAllMutation.isPending ? (
                 <>
@@ -153,7 +158,7 @@ export default function AdminPublishingPage() {
           <Card>
             <CardContent className="pt-4">
               <div className="text-xs text-slate-500">Approved Ready</div>
-              <div className="text-2xl font-bold text-emerald-600">{approvedCount}</div>
+              <div className="text-2xl font-bold text-emerald-600">{publishablePages.length}</div>
             </CardContent>
           </Card>
           <Card>
@@ -187,6 +192,18 @@ export default function AdminPublishingPage() {
           </div>
         )}
 
+        {blockedApprovedPages.length > 0 && (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-sm text-amber-800">
+            <div className="font-semibold flex items-center gap-2">
+              <AlertTriangle size={14} />
+              Some approved rows are still blocked from publish
+            </div>
+            <div className="mt-1">
+              Only pages with `qualityDecision = approve` and `policyStatus = approved` will publish. Rows outside that gate stay off the public route and will 404.
+            </div>
+          </div>
+        )}
+
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-sm flex items-center gap-2">
@@ -200,10 +217,10 @@ export default function AdminPublishingPage() {
                 <Loader2 size={20} className="animate-spin mx-auto mb-2" />
                 Loading approved pages…
               </div>
-            ) : !approvedPages.data?.pages.length ? (
+            ) : !publishablePages.length ? (
               <div className="text-sm text-slate-500">No approved pages are waiting for publish.</div>
             ) : (
-              approvedPages.data.pages.map((page) => (
+              publishablePages.map((page) => (
                 <div key={page.id} className="border border-slate-200 rounded-lg p-3 bg-white">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">
@@ -213,6 +230,9 @@ export default function AdminPublishingPage() {
                         <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">approved</Badge>
                         <Badge className="bg-slate-100 text-slate-700 hover:bg-slate-100">
                           decision: {page.qualityDecision ?? "none"}
+                        </Badge>
+                        <Badge className="bg-slate-100 text-slate-700 hover:bg-slate-100">
+                          policy: {page.policyStatus}
                         </Badge>
                         <Badge className="bg-slate-100 text-slate-700 hover:bg-slate-100">
                           publish: {page.publishScore}

@@ -15,6 +15,7 @@ import { eq, and } from "drizzle-orm";
 import { getDb } from "../db";
 import { contentPages, topics } from "../../drizzle/schema";
 import { DEFAULT_BASE_URL } from "./baseUrl";
+import { isPublishablePage } from "./visibility";
 
 // ─── Structured data generators ───────────────────────────────────────────────
 
@@ -104,8 +105,12 @@ export async function publishPage(
   const page = rows[0];
   if (!page) throw new Error(`Page ${pageId} not found`);
 
-  if (page.status !== "approved") {
-    throw new Error(`Page ${pageId} is not approved (status: ${page.status}, decision: ${page.qualityDecision}). Only approved pages may be published.`);
+  if (!isPublishablePage(page.status, page.qualityDecision ?? null, page.policyStatus)) {
+    throw new Error(
+      `Page ${pageId} is not publishable ` +
+      `(status: ${page.status}, decision: ${page.qualityDecision}, policy: ${page.policyStatus}). ` +
+      `Only pages with status=approved, decision=approve, and policy=approved may be published.`
+    );
   }
 
   const publishedAt = new Date();
@@ -175,6 +180,7 @@ export async function publishAllApproved(baseUrl?: string): Promise<PublishResul
     .where(and(
       eq(contentPages.status, "approved"),
       eq(contentPages.qualityDecision, "approve"),
+      eq(contentPages.policyStatus, "approved"),
     ))
     .limit(50);
 

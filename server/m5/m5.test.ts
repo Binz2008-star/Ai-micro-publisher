@@ -12,6 +12,8 @@
 import { describe, it, expect } from "vitest";
 import { generateFaqSchema, generateArticleSchema } from "./publisher";
 import { buildSitemapXml, type SitemapEntry } from "./sitemap";
+import { buildRobotsTxt } from "./robots";
+import { isPublicPageStatus, isPublishablePage, shouldNoindexPage } from "./visibility";
 
 // ─── FAQ schema extraction ────────────────────────────────────────────────────
 
@@ -172,29 +174,54 @@ describe("buildSitemapXml", () => {
 describe("Publish gate — approved pages only", () => {
   it("publishPage throws for non-approved status (unit test via error message)", async () => {
     // We test the guard logic without hitting the DB
-    // The publishPage function throws: "Page X is not approved (status: ...)"
+    // The publishPage function throws for rows that are not fully publishable
     // This is verified by checking the error message format
-    const errorMsg = "Page 999 is not approved (status: draft, decision: null). Only approved pages may be published.";
-    expect(errorMsg).toContain("not approved");
-    expect(errorMsg).toContain("Only approved pages may be published");
+    const errorMsg = "Page 999 is not publishable (status: draft, decision: null, policy: pending). Only pages with status=approved, decision=approve, and policy=approved may be published.";
+    expect(errorMsg).toContain("not publishable");
+    expect(errorMsg).toContain("status=approved, decision=approve, and policy=approved");
   });
 
   it("noindex is true for archived pages", () => {
-    // Simulate the noindex logic from the getPage procedure
-    const archivedPage = { status: "archived", policyStatus: "approved" };
-    const noindex = archivedPage.status === "archived" || archivedPage.policyStatus === "rejected";
-    expect(noindex).toBe(true);
+    expect(shouldNoindexPage("archived", "approved")).toBe(true);
   });
 
   it("noindex is true for policy-rejected pages", () => {
-    const rejectedPage = { status: "published", policyStatus: "rejected" };
-    const noindex = rejectedPage.status === "archived" || rejectedPage.policyStatus === "rejected";
-    expect(noindex).toBe(true);
+    expect(shouldNoindexPage("published", "rejected")).toBe(true);
   });
 
   it("noindex is false for approved published pages", () => {
-    const approvedPage = { status: "published", policyStatus: "approved" };
-    const noindex = approvedPage.status === "archived" || approvedPage.policyStatus === "rejected";
-    expect(noindex).toBe(false);
+    expect(shouldNoindexPage("published", "approved")).toBe(false);
+  });
+
+  it("archived pages remain publicly fetchable", () => {
+    expect(isPublicPageStatus("archived")).toBe(true);
+  });
+
+  it("approved pages are not public until published", () => {
+    expect(isPublicPageStatus("approved")).toBe(false);
+  });
+
+  it("requires policy approval before a page is publishable", () => {
+    expect(isPublishablePage("approved", "approve", "flagged")).toBe(false);
+    expect(isPublishablePage("approved", "approve", "rejected")).toBe(false);
+  });
+
+  it("accepts only fully approved pages as publishable", () => {
+    expect(isPublishablePage("approved", "approve", "approved")).toBe(true);
+    expect(isPublishablePage("reviewing", "approve", "approved")).toBe(false);
+    expect(isPublishablePage("approved", "retry", "approved")).toBe(false);
+  });
+});
+
+describe("buildRobotsTxt", () => {
+  it("includes admin and api disallow rules", () => {
+    const robots = buildRobotsTxt("https://example.com");
+    expect(robots).toContain("Disallow: /admin/");
+    expect(robots).toContain("Disallow: /api/");
+  });
+
+  it("includes the sitemap URL", () => {
+    const robots = buildRobotsTxt("https://example.com/");
+    expect(robots).toContain("Sitemap: https://example.com/sitemap.xml");
   });
 });
