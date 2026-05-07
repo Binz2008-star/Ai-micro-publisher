@@ -12,7 +12,7 @@ import { invokeLLM } from "../_core/llm";
 import { PROTOTYPE_BRIEF } from "./brief";
 import { runQualityGate, THRESHOLDS } from "./quality";
 
-// ─── Cost estimation (rough: $0.002 per 1K tokens, gpt-4o-mini equivalent) ───
+// ─── Cost estimation (prototype rough estimate, not provider billing) ───────
 const COST_PER_1K_TOKENS = 0.002;
 
 function estimateCost(totalTokens: number): number {

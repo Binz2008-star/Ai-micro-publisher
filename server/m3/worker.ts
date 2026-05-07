@@ -16,7 +16,7 @@ import { BaseWorker } from "../workers/base";
 import { QUEUE_NAMES } from "../queue/connection";
 import { getDb } from "../db";
 import { topics, contentPages, generationJobs } from "../../drizzle/schema";
-import { invokeLLM } from "../_core/llm";
+import { getConfiguredLlmProviderName, invokeLLM } from "../_core/llm";
 import { generateBrief, buildSystemPrompt, buildUserPrompt, generateSlug } from "./brief";
 import { estimateCostUsd, checkDailySpendLimit } from "./spend";
 import { nanoid } from "nanoid";
@@ -92,7 +92,7 @@ export async function generateDraftForTopic(topicId: number): Promise<Generation
     topicId,
     jobType: "generate",
     status: "running",
-    provider: "built-in",
+    provider: getConfiguredLlmProviderName(),
     idempotencyKey,
     metadata: { brief, slug, version: nextVersion },
   });

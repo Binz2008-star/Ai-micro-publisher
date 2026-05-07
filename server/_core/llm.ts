@@ -209,16 +209,101 @@ const normalizeToolChoice = (
   return toolChoice;
 };
 
-const resolveApiUrl = () =>
-  ENV.forgeApiUrl && ENV.forgeApiUrl.trim().length > 0
-    ? `${ENV.forgeApiUrl.replace(/\/$/, "")}/v1/chat/completions`
-    : "https://forge.manus.im/v1/chat/completions";
+const DEFAULT_FORGE_API_URL = "https://forge.manus.im/v1/chat/completions";
+const DEFAULT_FORGE_MODEL = "gemini-2.5-flash";
+const DEFAULT_HF_API_URL = "https://router.huggingface.co/v1/chat/completions";
+const DEFAULT_HF_MODEL = "Qwen/Qwen2.5-7B-Instruct";
+const PLACEHOLDER_HOSTS = new Set(["example.com", "www.example.com"]);
 
-const assertApiKey = () => {
-  if (!ENV.forgeApiKey) {
-    throw new Error("OPENAI_API_KEY is not configured");
-  }
+type LlmProviderName = "huggingface" | "forge";
+
+type LlmProviderConfig = {
+  name: LlmProviderName;
+  apiKey: string;
+  apiUrl: string;
+  model: string;
+  defaultMaxTokens: number;
+  extraPayload?: Record<string, unknown>;
 };
+
+const resolveForgeApiUrl = () => {
+  const configured = ENV.forgeApiUrl?.trim();
+  if (!configured) {
+    return DEFAULT_FORGE_API_URL;
+  }
+
+  let url: URL;
+  try {
+    url = new URL(configured);
+  } catch {
+    throw new Error(`BUILT_IN_FORGE_API_URL is invalid: ${configured}`);
+  }
+
+  if (PLACEHOLDER_HOSTS.has(url.hostname.toLowerCase())) {
+    throw new Error(
+      `BUILT_IN_FORGE_API_URL points at a placeholder domain (${url.hostname})`,
+    );
+  }
+
+  const normalized = configured.replace(/\/+$/, "");
+  if (url.pathname.replace(/\/+$/, "") === "/v1/chat/completions") {
+    return normalized;
+  }
+
+  return `${normalized}/v1/chat/completions`;
+};
+
+const resolveHfModel = () => {
+  const configured = ENV.hfModel?.trim() || DEFAULT_HF_MODEL;
+  const provider = ENV.hfProvider?.trim().toLowerCase();
+
+  if (!provider || provider === "auto") {
+    return configured.includes(":") ? configured : `${configured}:fastest`;
+  }
+
+  if (configured.includes(":")) {
+    return configured;
+  }
+
+  return `${configured}:${provider}`;
+};
+
+const resolveProviderConfig = (): LlmProviderConfig => {
+  if (ENV.hfToken.trim()) {
+    return {
+      name: "huggingface",
+      apiKey: ENV.hfToken.trim(),
+      apiUrl: DEFAULT_HF_API_URL,
+      model: resolveHfModel(),
+      defaultMaxTokens: 2048,
+    };
+  }
+
+  if (ENV.forgeApiKey.trim()) {
+    return {
+      name: "forge",
+      apiKey: ENV.forgeApiKey.trim(),
+      apiUrl: resolveForgeApiUrl(),
+      model: DEFAULT_FORGE_MODEL,
+      defaultMaxTokens: 32768,
+      extraPayload: {
+        thinking: {
+          budget_tokens: 128,
+        },
+      },
+    };
+  }
+
+  throw new Error(
+    "No LLM provider configured. Set HF_TOKEN (preferred) or BUILT_IN_FORGE_API_KEY.",
+  );
+};
+
+export function getConfiguredLlmProviderName(): string {
+  if (ENV.hfToken.trim()) return "huggingface";
+  if (ENV.forgeApiKey.trim()) return "forge";
+  return "unconfigured";
+}
 
 const normalizeResponseFormat = ({
   responseFormat,
@@ -266,8 +351,6 @@ const normalizeResponseFormat = ({
 };
 
 export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
-  assertApiKey();
-
   const {
     messages,
     tools,
@@ -278,9 +361,11 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     responseFormat,
     response_format,
   } = params;
+  const provider = resolveProviderConfig();
+  const requestedMaxTokens = params.maxTokens ?? params.max_tokens;
 
   const payload: Record<string, unknown> = {
-    model: "gemini-2.5-flash",
+    model: provider.model,
     messages: messages.map(normalizeMessage),
   };
 
@@ -296,9 +381,10 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     payload.tool_choice = normalizedToolChoice;
   }
 
-  payload.max_tokens = 32768
-  payload.thinking = {
-    "budget_tokens": 128
+  payload.max_tokens = requestedMaxTokens ?? provider.defaultMaxTokens;
+
+  if (provider.extraPayload) {
+    Object.assign(payload, provider.extraPayload);
   }
 
   const normalizedResponseFormat = normalizeResponseFormat({
@@ -312,11 +398,11 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     payload.response_format = normalizedResponseFormat;
   }
 
-  const response = await fetch(resolveApiUrl(), {
+  const response = await fetch(provider.apiUrl, {
     method: "POST",
     headers: {
       "content-type": "application/json",
-      authorization: `Bearer ${ENV.forgeApiKey}`,
+      authorization: `Bearer ${provider.apiKey}`,
     },
     body: JSON.stringify(payload),
   });

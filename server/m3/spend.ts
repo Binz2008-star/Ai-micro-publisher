@@ -4,7 +4,7 @@
  * Tracks LLM generation costs and enforces the daily spend limit
  * configured in system_settings.daily_spend_limit_usd.
  *
- * Cost model: $0.002 per 1K tokens (conservative estimate for built-in LLM)
+ * Cost model: $0.002 per 1K tokens (prototype rough estimate, not provider billing)
  */
 
 import { sql, gte, and } from "drizzle-orm";
