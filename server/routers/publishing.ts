@@ -18,6 +18,7 @@ import { publishPage, publishAllApproved, archivePage } from "../m5/publisher";
 import { generateSitemapEntries } from "../m5/sitemap";
 import { isPlaceholderBaseUrl, resolveBaseUrlInfo } from "../m5/baseUrl";
 import { shouldNoindexPage } from "../m5/visibility";
+import { resolvePublicAdSlot } from "../m6/ads";
 
 // ─── adminProcedure ───────────────────────────────────────────────────────────
 
@@ -127,7 +128,7 @@ export const publishingRouter = router({
     };
   }),
 
-  /** Get a single page with full structured data (public — for SEO rendering) */
+  /** Get a single page with structured data and M6 ad eligibility */
   getPage: publicProcedure
     .input(z.object({ slug: z.string() }))
     .query(async ({ input, ctx }) => {
@@ -152,11 +153,19 @@ export const publishingRouter = router({
       if (!rows[0]) throw new TRPCError({ code: "NOT_FOUND", message: "Page not found or not published" });
 
       const page = rows[0];
+      const { adSlot } = await resolvePublicAdSlot(ctx, {
+        id: page.id,
+        status: page.status,
+        policyStatus: page.policyStatus,
+        qualityDecision: page.qualityDecision,
+      });
+
       return {
         ...page,
         publicUrl: `${baseUrl}/p/${page.slug}`,
         canonicalUrl: `${baseUrl}/p/${page.slug}`,
         noindex: shouldNoindexPage(page.status, page.policyStatus),
+        adSlot,
       };
     }),
 

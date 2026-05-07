@@ -6,7 +6,7 @@
  * - SEO metadata (title, description, canonical)
  * - JSON-LD structured data (Article + FAQPage schemas)
  * - Noindex for archived/rejected pages
- * - No ads (M6 scope)
+ * - Safe ad placeholder only for eligible public sessions
  */
 
 import { useEffect } from "react";
@@ -16,6 +16,7 @@ import { Streamdown } from "streamdown";
 import { Loader2, AlertTriangle, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
+import SafeAdPlaceholder from "@/components/SafeAdPlaceholder";
 
 // ─── SEO head manager ─────────────────────────────────────────────────────────
 
@@ -149,6 +150,7 @@ export default function PublicPage() {
   }
 
   const structuredDataArray = Array.isArray(data.structuredData) ? data.structuredData : [];
+  const showAdPlaceholder = data.adSlot?.enabled === true;
 
   return (
     <>
@@ -189,6 +191,8 @@ export default function PublicPage() {
             <span>·</span>
             <span className="font-mono bg-slate-100 px-1.5 py-0.5 rounded">{data.slug}</span>
           </div>
+
+          <SafeAdPlaceholder enabled={showAdPlaceholder} />
 
           {/* Article content */}
           <div className="prose prose-slate max-w-none prose-headings:font-bold prose-h1:text-3xl prose-h2:text-xl prose-h2:mt-8 prose-p:leading-relaxed prose-li:leading-relaxed">
